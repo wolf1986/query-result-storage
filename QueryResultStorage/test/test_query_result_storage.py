@@ -52,8 +52,20 @@ class TestQueryResultStorage(TestCase):
             Mocks.ObjQuery, Mocks.ObjResult2, datetime.datetime.now() + datetime.timedelta(seconds=1)
         )
 
+        # Verify objects are written correctly
         self._load_verify_objects(Mocks.ObjQuery, Mocks.ObjResult1, query_id, result_id1)
         self._load_verify_objects(Mocks.ObjQuery, Mocks.ObjResult2, query_id, result_id2)
+
+        # Verify object ids are correct
+        self.assertEqual(
+            set(self.results_storage.find_query_ids()),
+            {query_id}
+        )
+
+        self.assertEqual(
+            set(self.results_storage.find_result_ids()),
+            {result_id1, result_id2}
+        )
 
     def _load_verify_objects(self, obj_query, obj_result, query_id, result_id):
         query_result_raw = self.results_storage.load_result_id(result_id)

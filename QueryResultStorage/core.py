@@ -10,9 +10,6 @@ from typing import List
 
 from QueryResultStorage.utils import timestamp_parse, obj_to_json, timestamp, hash_dict
 
-DIR_NAME_QUERIES = 'queries'
-DIR_NAME_RESULTS = 'results'
-
 logger = getLogger('QueryResultStorage')
 
 
@@ -53,42 +50,56 @@ class QueryResultRaw:
 
 
 class ResultsStorage:
-    def __init__(self, path_dir_storage):
+    def __init__(self, path_dir_storage, compress_fs_objects=True):
         self.path_dir_storage = path_dir_storage
+
+        # Initialize default values
+        self.DIR_NAME_QUERIES = 'queries'
+        self.DIR_NAME_RESULTS = 'results'
+        self.FILE_EXTENSION = '.json'
+
+        if compress_fs_objects:
+            self.FILE_EXTENSION += '.gz'
+
+        if not compress_fs_objects:
+            self._open_func = open
+        else:
+            self._open_func = gzip.open
+
         self.init_storage_dir()
 
     def init_storage_dir(self):
-        os.makedirs(os.path.join(self.path_dir_storage, DIR_NAME_QUERIES), exist_ok=True)
-        os.makedirs(os.path.join(self.path_dir_storage, DIR_NAME_RESULTS), exist_ok=True)
+        os.makedirs(os.path.join(self.path_dir_storage, self.DIR_NAME_QUERIES), exist_ok=True)
+        os.makedirs(os.path.join(self.path_dir_storage, self.DIR_NAME_RESULTS), exist_ok=True)
 
     def find_result_ids(self):
-        list_paths = glob.glob(os.path.join(self.path_dir_storage, DIR_NAME_RESULTS, '*.json'))
+        list_paths = glob.glob(os.path.join(self.path_dir_storage, self.DIR_NAME_RESULTS, '*' + self.FILE_EXTENSION))
         results = []
         for path_file in list_paths:
             filename = os.path.basename(path_file)
-            result_id, _ = os.path.splitext(filename)
+            result_id = filename[:-len(self.FILE_EXTENSION)]
             results.append(result_id)
 
         return results
 
     def find_query_ids(self):
-        list_paths = glob.glob(os.path.join(self.path_dir_storage, DIR_NAME_QUERIES, '*.json'))
+        list_paths = glob.glob(os.path.join(self.path_dir_storage, self.DIR_NAME_QUERIES, '*' + self.FILE_EXTENSION))
         queries = []
         for path_file in list_paths:
             filename = os.path.basename(path_file)
-            query_id, _ = os.path.splitext(filename)
+            query_id = filename[:-len(self.FILE_EXTENSION)]
             queries.append(query_id)
 
         return queries
 
     def path_query(self, query_id):
-        return os.path.join(self.path_dir_storage, DIR_NAME_QUERIES, query_id + '.json')
+        return os.path.join(self.path_dir_storage, self.DIR_NAME_QUERIES, query_id + self.FILE_EXTENSION)
 
     def path_result(self, result_id):
-        return os.path.join(self.path_dir_storage, DIR_NAME_RESULTS, result_id + '.json.gz')
+        return os.path.join(self.path_dir_storage, self.DIR_NAME_RESULTS, result_id + self.FILE_EXTENSION)
 
     def load_query(self, query_id):
-        with open(self.path_query(query_id), 'rt', encoding='utf-8') as fp:
+        with self._open_func(self.path_query(query_id), 'rt', encoding='utf-8') as fp:
             return json.loads(fp.read())
 
     def save_query_and_result(self, query_obj, result_obj, sample_time=None):
@@ -111,11 +122,11 @@ class ResultsStorage:
 
         path_file = self.path_query(query_id)
         if not os.path.exists(path_file):
-            with open(path_file, 'wt', encoding='utf-8') as fp:
+            with self._open_func(path_file, 'wt', encoding='utf-8') as fp:
                 fp.write(obj_to_json(query_obj))
 
         path_file = self.path_result(result_id)
-        with gzip.open(path_file, 'wt', encoding='utf-8') as fp:
+        with self._open_func(path_file, 'wt', encoding='utf-8') as fp:
             fp.write(obj_to_json(result_obj))
 
         return query_id, result_id
@@ -140,10 +151,10 @@ class ResultsStorage:
         """
 
         _, query_id = self.parse_result_id(result_id)
-        with open(self.path_query(query_id), 'rt', encoding='utf-8') as fp:
+        with self._open_func(self.path_query(query_id), 'rt', encoding='utf-8') as fp:
             query_str = fp.read()
 
-        with gzip.open(self.path_result(result_id), 'rt', encoding='utf-8') as fp:
+        with self._open_func(self.path_result(result_id), 'rt', encoding='utf-8') as fp:
             result_str = fp.read()
 
         query_time, str_hash = self.parse_result_id(result_id)
@@ -160,8 +171,7 @@ class ResultsStorage:
 
         return query_result
 
-
-# class QueryResultRawOld:
+    # class QueryResultRawOld:
     # def __init__(self, result_storage: ResultsStorage, query_obj, result_obj, sample_time=None):
     #     """
     #         Assume data is encoded as utf-8
