@@ -1,10 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name='QueryResultStorage',
+    name='query_result_storage',
     version='0.1.1',
-    packages=['QueryResultStorage', 'QueryResultStorage.test'],
-    package_data={
-        'QueryResultStorage.test': ['QueryResultStorage/test/data']
-    },
+    packages=['query_result_storage', 'query_result_storage.test'],
 )
