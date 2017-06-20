@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from unittest import TestCase
 
-from QueryResultStorage.core import ResultsStorage
+from query_result_storage.core import ResultsStorage
 
 
 class Paths:

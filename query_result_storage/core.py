@@ -8,9 +8,9 @@ from logging import getLogger
 from typing import Dict
 from typing import List
 
-from QueryResultStorage.utils import timestamp_parse, obj_to_json, timestamp, hash_dict
+from .utils import timestamp_parse, obj_to_json, timestamp, hash_dict
 
-logger = getLogger('QueryResultStorage')
+logger = getLogger('query_result_storage')
 
 
 class IndexStorage:
