@@ -20,10 +20,12 @@ class IndexStorage:
         self.ids_queries = self.result_storage.find_query_ids()
         self.ids_results = self.result_storage.find_result_ids()
         self.index_result_dates = defaultdict(list)  # type: Dict[str, List[datetime.datetime]]
+        self.index_query_result_ids = defaultdict(list)  # type: Dict[str, List[str]]
 
         for id_result in self.ids_results:
             query_date, query_id = ResultsStorage.parse_result_id(id_result)
             self.index_result_dates[query_id].append(query_date)
+            self.index_query_result_ids[query_id].append(id_result)
 
     def load_all_queries(self):
         return [
