@@ -8,6 +8,8 @@ from logging import getLogger
 from typing import Dict
 from typing import List
 
+import itertools
+
 from .utils import timestamp_parse, obj_to_json, timestamp, hash_dict
 
 logger = getLogger('query_result_storage')
@@ -19,19 +21,42 @@ class IndexStorage:
 
         self.ids_queries = self.result_storage.find_query_ids()
         self.ids_results = self.result_storage.find_result_ids()
-        self.index_result_dates = defaultdict(list)  # type: Dict[str, List[datetime.datetime]]
+
+        logger.info('Discovered - Queries: {}; Results: {}'.format(len(self.ids_queries), len(self.ids_results)))
+
+        self.index_query_result_dates = defaultdict(list)  # type: Dict[str, List[datetime.datetime]]
         self.index_query_result_ids = defaultdict(list)  # type: Dict[str, List[str]]
 
         for id_result in self.ids_results:
             query_date, query_id = ResultsStorage.parse_result_id(id_result)
-            self.index_result_dates[query_id].append(query_date)
+            self.index_query_result_dates[query_id].append(query_date)
             self.index_query_result_ids[query_id].append(id_result)
 
-    def load_all_queries(self):
-        return [
-            self.result_storage.load_query(query_id)
-            for query_id in self.ids_queries
+    def filter_query_ids(self, filter_by_query, queries=None):
+        if queries is None:
+            queries = self.result_storage.load_queries(self.ids_queries)
+
+        query_ids = [
+            self.ids_queries[index]
+            for index, query in enumerate(queries)
+            if filter_by_query(query)
         ]
+
+        logger.info('Found {} queries for given filter'.format(len(query_ids)))
+
+        return query_ids, queries
+
+    def get_query_result_ids(self, query_ids):
+        result_ids = list(
+            itertools.chain(*[
+                self.index_query_result_ids[query_id]
+                for query_id in query_ids
+            ])
+        )
+
+        logger.debug('Found a total of {} results'.format(len(result_ids)))
+
+        return result_ids
 
 
 class QueryResultRaw:
@@ -102,7 +127,13 @@ class ResultsStorage:
 
     def load_query(self, query_id):
         with self._open_func(self.path_query(query_id), 'rt', encoding='utf-8') as fp:
-            return json.loads(fp.read())
+            query = json.loads(fp.read())
+
+        logger.debug('{}: {}'.format(query_id, obj_to_json(query, indent=None)))
+        return query
+
+    def load_queries(self, query_ids):
+        return [self.load_query(query_id) for query_id in query_ids]
 
     def save_query_and_result(self, query_obj, result_obj, sample_time=None):
         """
@@ -172,79 +203,3 @@ class ResultsStorage:
             raise Exception("Bad result encountered, result hash doesn't match")
 
         return query_result
-
-    # class QueryResultRawOld:
-    # def __init__(self, result_storage: ResultsStorage, query_obj, result_obj, sample_time=None):
-    #     """
-    #         Assume data is encoded as utf-8
-    #     """
-    #
-    #     self.result_storage = result_storage
-    #
-    #     if sample_time is None:
-    #         sample_time = datetime.datetime.now()
-    #
-    #     self.query_obj = query_obj
-    #     self.result_obj = result_obj
-    #
-    #     self.sample_time = sample_time
-    #     self.query_id = hash_dict(query_obj)
-    #
-    #     self.result_id = '{}_{}'.format(timestamp(self.sample_time), self.query_id)
-
-    # def get_path_query_of_result(self, result_id):
-    #     _, query_id = self.parse_result_id(result_id)
-    #     return self.result_storage.path_query(query_id)
-
-    # def get_path_result_diff(self, result_id):
-    #     path_regular = Path(self.result_storage.path_result(result_id))
-    #     return str(
-    #         path_regular.with_suffix(".diff" + path_regular.suffix)
-    #     )
-
-    # def save(self):
-    #     logger.debug('Saving result: {}'.format(self.result_id))
-    #
-    #     path_file = self.result_storage.path_query(self.query_id)
-    #     if not os.path.exists(path_file):
-    #         with open(path_file, 'wt', encoding='utf-8') as fp:
-    #             fp.write(obj_to_json(self.query_obj))
-    #
-    #     path_file = self.result_storage.path_result(self.result_id)
-    #     with open(path_file, 'wt', encoding='utf-8') as fp:
-    #         fp.write(obj_to_json(self.result_obj))
-
-    # def save_result_diff(self, obj_relative, result_to_id, obj_to_results):
-    #     # Create an index with previous results by id
-    #     dict_obj_previous = {}
-    #     for result in obj_to_results(obj_relative):
-    #         dict_obj_previous[result_to_id(result)] = hash_dict(result)
-    #
-    #     obj_diff_records = {}
-    #
-    #     # Compare current results with previous - New & Changed
-    #     ids_current = set()
-    #     for result in self.result_obj:
-    #         res_id = result_to_id(result)
-    #         ids_current.add(res_id)
-    #         res_hash = hash_dict(result)
-    #         if res_id not in dict_obj_previous and res_hash != dict_obj_previous[res_id]:
-    #             # New or updated Result
-    #             obj_diff_records[res_id] = result
-    #
-    #     # Mark as deleted
-    #     ids_previous = set(dict_obj_previous.keys())
-    #     ids_deleted = ids_previous.difference(ids_current)
-    #     for res_id in ids_deleted:
-    #         obj_diff_records[res_id] = None
-    #
-    #     # Add additional fields
-    #     obj_diff = {
-    #         '__type': 'diff',
-    #         'path_previous': self.result_storage.path_result(self.result_id),
-    #         'records': obj_diff_records,
-    #     }
-    #
-    #     path_file = self.get_path_result_diff(self.result_id)
-    #     with open(path_file, 'wt', encoding='utf-8') as fp:
-    #         fp.write(obj_to_json(obj_diff))
